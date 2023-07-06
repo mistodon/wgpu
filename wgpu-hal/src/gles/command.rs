@@ -726,7 +726,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
             self.cmd_buffer.commands.push(C::SetPushConstants {
                 uniform,
-                offset: range.start + offset,
+                offset: range.start - start_offset + offset,
             });
             offset += size;
         }
