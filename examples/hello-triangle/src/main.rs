@@ -26,10 +26,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty(),
-                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
+                features: wgpu::Features::PUSH_CONSTANTS,
+                limits: wgpu::Limits {
+                    max_push_constant_size: 32,
+                    ..wgpu::Limits::downlevel_webgl2_defaults()
+                }
+                .using_resolution(adapter.limits()),
             },
             None,
         )
@@ -42,10 +44,20 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
+    let push_size = std::mem::size_of::<[f32; 4]>() as u32;
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        push_constant_ranges: &[
+            wgpu::PushConstantRange {
+                stages: wgpu::ShaderStages::VERTEX,
+                range: 0..push_size,
+            },
+            wgpu::PushConstantRange {
+                stages: wgpu::ShaderStages::FRAGMENT,
+                range: push_size..(push_size * 2),
+            },
+        ],
     });
 
     let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -124,6 +136,31 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                         depth_stencil_attachment: None,
                     });
                     rpass.set_pipeline(&render_pipeline);
+
+                    fn push_constant_bytes<T>(t: &T) -> &[u8] {
+                        unsafe {
+                            let p = t as *const _ as *const u8;
+                            let size = std::mem::size_of::<T>();
+                            std::slice::from_raw_parts(p, size)
+                        }
+                    }
+
+                    let vpush = [0.25, 0.25, 0.0, 0.0_f32];
+                    let fpush = [0.0, 0.0, 0.25, 0.0_f32];
+
+                    rpass.set_push_constants(
+                        wgpu::ShaderStages::VERTEX,
+                        0,
+                        push_constant_bytes(&vpush),
+                    );
+                    let push_offset = std::mem::size_of::<[f32; 4]>() as u32;
+                    rpass.set_push_constants(
+                        wgpu::ShaderStages::FRAGMENT,
+                        push_offset,
+                        push_constant_bytes(&fpush),
+                    );
+
+
                     rpass.draw(0..3, 0..1);
                 }
 
