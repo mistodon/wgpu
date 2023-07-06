@@ -716,17 +716,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let range = self.cmd_buffer.add_push_constant_data(data);
 
-        let end = start_offset + data.len() as u32 * 4;
-        let mut offset = start_offset;
+        let end = data.len() as u32 * 4;
+        let mut offset = 0;
         while offset < end {
-            let uniform = self.state.push_offset_to_uniform[offset as usize / 4].clone();
+            let uniform = self.state.push_offset_to_uniform[(start_offset + offset) as usize / 4].clone();
             let size = uniform.size;
             if uniform.location.is_none() {
                 panic!("No uniform for push constant");
             }
             self.cmd_buffer.commands.push(C::SetPushConstants {
                 uniform,
-                offset: range.start - start_offset + offset,
+                offset: range.start + offset,
             });
             offset += size;
         }
